@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-set -xeu
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+set -eu -o pipefail
 
-pushd $(dirname $SCRIPT_DIR)
-  ./gradlew jasmineTests
-popd
+UAA_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+"${UAA_DIR}/scripts/gradle" jasmineTests
