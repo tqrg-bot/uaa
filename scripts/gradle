@@ -29,7 +29,11 @@ COMMAND
 db="$(db_variant "${DB-hsqldb}")"
 TESTENV="${TESTENV-${db},default}"
 
-if [[ -x /bin/start-slapd ]]; then /bin/start-slapd; fi
+if [[ -x /bin/start-slapd ]]; then
+  /bin/start-slapd
+  ldapadd -Y EXTERNAL -H ldapi:/// -f "${UAA_DIR}/uaa/src/main/resources/ldap_db_init.ldif"
+  ldapadd -x -D 'cn=admin,dc=test,dc=com' -w password -f "${UAA_DIR}/uaa/src/main/resources/ldap_init.ldif"
+fi
 if [[ -x "/bin/start-${db}" ]]; then "/bin/start-${db}"; fi
 
 gradle --stacktrace \
