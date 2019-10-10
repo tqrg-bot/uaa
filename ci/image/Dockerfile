@@ -2,7 +2,8 @@ FROM ubuntu:18.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl jq git unzip vim sudo \
-    apt-transport-https apt-utils ca-certificates gnupg
+    apt-transport-https apt-utils ca-certificates gnupg \
+    && apt-get autoremove -yqq && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
     # unzip used once
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -15,7 +16,8 @@ RUN export JDK="openjdk-11.0.2_07.tar.gz" \
     && mkdir -p ${JAVA_HOME} \
     && curl -sLo ${JDK} https://java-buildpack.cloudfoundry.org/openjdk-jdk/trusty/x86_64/${JDK} \
     && sha256sum ${JDK} | grep af81ee6bd8baf98be0a707a02d6f04641d7397ada27126a7bad1aeaecee57574 \
-    && tar -xf ${JDK} -C ${JAVA_HOME}
+    && tar -xf ${JDK} -C ${JAVA_HOME} \
+    && rm -rf ${JDK}
 #/JAVA
 
 # CHROME; see https://github.com/justinribeiro/dockerfiles/blob/c87217ebfeced3f0088f6559b799ed85f495ddff/chrome-headless/Dockerfile#L31-L51
@@ -35,7 +37,6 @@ RUN curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add - 
     libxss1 \
     libasound2 \
     libnss3-tools \
-    # previously this ended here
     && apt-get install -y --no-install-recommends libosmesa6 \
         && ln -s /usr/lib/x86_64-linux-gnu/libOSMesa.so.8 \
                  /opt/google/chrome/libosmesa.so \
@@ -52,45 +53,15 @@ RUN curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add - 
     && curl -sfLO https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip \
     && unzip chromedriver_linux64.zip -d /usr/bin/ \
     && rm chromedriver_linux64.zip \
-    && ln -s /usr/bin/chromedriver /usr/local/bin/
-    # ^ TODO: WHY DO WE NEED THE BINARY IN TWO PLACES?
+    && ln -s /usr/bin/chromedriver /usr/local/bin/ \
+    && apt-get autoremove -yqq && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    # ^ TODO: WHY IS THE BINARY NEEDED IN TWO PLACES?
 #/CHROME
-
-# DATABASES
-# DATABASES-MYSQL
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    mysql-server \
-    && sudo mysql_ssl_rsa_setup --uid=mysql \
-    && echo "#!/usr/bin/env bash"                                                   >> /bin/start-mysql \
-    && echo "set -eu -o pipefail"                                                   >> /bin/start-mysql \
-    && echo "find /var/lib/mysql -type f -exec touch {} \; && service mysql start"  >> /bin/start-mysql \
-    && echo "while ! mysql -e 'select 1'; do sleep 1; done;"                        >> /bin/start-mysql \
-    && chmod 0755 /bin/start-mysql
-#/DATABASES-MYSQL
-
-# DATABASES-PERCONA - collides with mysql-erver
-#RUN export PERCONA_DEB="percona-release_0.1-4.$(lsb_release -sc)_all.deb" \
-#    && curl -sLo ${PERCONA_DEB} https://repo.percona.com/apt/${PERCONA_DEB} \
-#    && dpkg -i ${PERCONA_DEB} \
-#    && rm ${PERCONA_DEB} \
-#    && apt-get update && apt-get install -y --no-install-recommends \
-#    percona-server-server-5.7 mysql-client
-#/DATABASES-PERCONA
-
-# DATABASES-POSTGRESQL
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql postgresql-contrib \
-    && echo "#!/usr/bin/env bash"                                               >> /bin/start-postgresql \
-    && echo "set -eu -o pipefail"                                               >> /bin/start-postgresql \
-    && echo "service postgresql start"                                          >> /bin/start-postgresql \
-    && echo "while ! sudo -u postgres psql -c 'select 1'; do sleep 1; done;"    >> /bin/start-postgresql \
-    && chmod 0755 /bin/start-postgresql
-#/DATABASES-POSTGRESQL
-#/DATABASES
 
 # LDAP; see https://help.ubuntu.com/lts/serverguide/openldap-server.html
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gnutls-bin slapd ldap-utils ssl-cert \
+    && apt-get autoremove -yqq && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
     && certtool --generate-privkey > /etc/ssl/private/cakey.pem \
     && echo "cn = Pivotal Software Test"    >> /etc/ssl/ca.info \
     && echo "  ca"                          >> /etc/ssl/ca.info \
@@ -136,6 +107,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod 0755 /bin/start-slapd
 #/LDAP
 
+# DATABASES
+# DATABASES-POSTGRESQL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql postgresql-contrib \
+    && apt-get autoremove -yqq && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && echo "#!/usr/bin/env bash"                                               >> /bin/start-postgresql \
+    && echo "set -eu -o pipefail"                                               >> /bin/start-postgresql \
+    && echo "service postgresql start"                                          >> /bin/start-postgresql \
+    && echo "while ! sudo -u postgres psql -c 'select 1'; do sleep 1; done;"    >> /bin/start-postgresql \
+    && chmod 0755 /bin/start-postgresql
+#/DATABASES-POSTGRESQL
+
+# DATABASES-MYSQL-OR-PERCONA
+RUN export PERCONA_DEB="percona-release_latest.$(lsb_release -sc)_all.deb" \
+    && curl -sLo ${PERCONA_DEB} https://repo.percona.com/apt/${PERCONA_DEB} \
+    && dpkg -i ${PERCONA_DEB} && rm ${PERCONA_DEB} \
+    && apt-get update && apt-get install -y --no-install-recommends \
+# MYSQL - collides with PERCONA
+    mysql-server \
+# MYSQL - collides with PERCONA
+# PERCONA - collides with MYSQL
+#    percona-server-server-5.7 mysql-client \
+#/PERCONA - collides with MYSQL
+    && apt-get autoremove -yqq && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && sudo mysql_ssl_rsa_setup --uid=mysql \
+    && echo "#!/usr/bin/env bash"                                                   >> /bin/start-mysql \
+    && echo "set -eu -o pipefail"                                                   >> /bin/start-mysql \
+    && echo "find /var/lib/mysql -type f -exec touch {} \; && service mysql start"  >> /bin/start-mysql \
+    && echo "while ! mysql -e 'select 1'; do sleep 1; done;"                        >> /bin/start-mysql \
+    && chmod 0755 /bin/start-mysql
+# DATABASES-MYSQL-OR-PERCONA
+#/DATABASES
+
 # PROJECT_SETUP
 ENV DB_NAME=uaa
 ENV DB_USER=root
@@ -162,9 +166,3 @@ RUN /bin/start-slapd \
     && ldapadd -x -D 'cn=admin,dc=test,dc=com' -w password -f /ldap/copy_of-uaa_src_main_resources_ldap_init.ldif \
     && rm -rf /ldap/
 #/PROJECT_SETUP
-
-# CLEANUP
-RUN apt-get autoremove -yqq \
-   && apt-get clean \
-   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-#/CLEANUP
