@@ -47,6 +47,6 @@
     <bean name="mfaProviderBootstrap" class="org.cloudfoundry.identity.uaa.mfa.MfaProviderBootstrap">
         <constructor-arg name="provisioning" ref="mfaProviderProvisioning"/>
         <property name="mfaProviders"
-                  value="${login.mfa.providers:#{null}}"/>
+                  value="#{@config['login']==null ? null : @config['login']['mfa']==null ? null : @config['login']['mfa']['providers']}"/>
     </bean>
 </beans>
